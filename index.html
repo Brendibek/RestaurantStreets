@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	
+	<meta charset="utf-8">
+	
+	<title>Restaurant Streets</title>
+	
+	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+	<link rel="shortcut icon" type="image/png" href="./favicon.png">
+	
+	
+	<script type="text/javascript" src="./Streetscafe.js?404"></script>
+	<script type="text/javascript" src="./jsm/avatar.js?404"></script>
+	
+	<script>
+		window.addEventListener ("touchmove", function (event) { event.preventDefault (); }, { capture: false, passive: false });
+		if (typeof window.devicePixelRatio != 'undefined' && window.devicePixelRatio > 2) {
+			var meta = document.getElementById ("viewport");
+			meta.setAttribute ('content', 'width=device-width, initial-scale=' + (2 / window.devicePixelRatio) + ', user-scalable=no');
+		}
+	</script>
+	
+	<style>
+		html,body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+		#openfl-content { background: #FFFFFF; width: 100%; height: 100%; margin: 0; padding: 0; }
+		@font-face {
+			font-family: 'Ad Lib Win95BT';
+			src: url('assets/AdLib.eot?#iefix') format('embedded-opentype'),
+			url('assets/AdLib.woff') format('woff'),
+			url('assets/AdLib.ttf') format('truetype'),
+			url('assets/AdLib.svg#Ad%20Lib%20Win95BT') format('svg');
+			font-weight: normal;
+			font-style: normal;
+		}
+		@font-face {
+			font-family: 'Groboldov';
+			src: url('assets/Groboldov.eot?#iefix') format('embedded-opentype'),
+			url('assets/Groboldov.woff') format('woff'),
+			url('assets/Groboldov.ttf') format('truetype'),
+			url('assets/Groboldov.svg#Groboldov') format('svg');
+			font-weight: normal;
+			font-style: normal;
+		}
+
+	</style>
+	
+</head>
+<body>
+	
+	<noscript>This webpage makes extensive use of JavaScript. Please enable JavaScript in your web browser to view this page.</noscript>
+	
+	<div id="canvasContainer" style="position: absolute; left: 0; top: -10000px;"></div>
+	<div id="containerFrames" style="position: absolute; left: 0; top: -10000px; height: 700px; overflow-y: scroll"></div>
+	<div id="openfl-content"></div>    
+	<script type="module">
+            import * as THREE from './build/three.module.js';
+            import { OrbitControls } from './jsm/controls/OrbitControls.js';
+            import { GLTFLoader } from './jsm/loaders/GLTFLoader.js';
+            
+            window['activeScenes'] = {};
+			window['reloadedMessage'] = 0;
+            let animationCacheDirectionsAll = [0, 1, 2, 3, 4]; //, 5, 6, 7];
+            let animationCacheDirectionsDiagonal = [1, 2, 4]; //, 5, 7];
+            
+            window['clipsFrameRate'] = 
+                [
+                    [0, 'ANIMATION_IDLE', 60, 85, [], animationCacheDirectionsAll],
+                    [1, 'ANIMATION_WALK', 0, 25, [], animationCacheDirectionsAll],
+                    [2, 'ANIMATION_SIT', 105, 106, [], animationCacheDirectionsDiagonal],
+                    [3, 'ANIMATION_EAT', 105, 130, [], animationCacheDirectionsDiagonal],
+                    [4, 'ANIMATION_WAITOR_WALK', 30, 55, ["tray"], animationCacheDirectionsAll],
+                    [5, 'ANIMATION_COOKING', 90, 105, [], animationCacheDirectionsDiagonal],
+                    [6, 'ANIMATION_EDITOR_IDLE', 130, 210, [], animationCacheDirectionsAll],
+                    [7, 'ANIMATION_EDITOR_OUTFIT_CHANGE', 210, 270, [], animationCacheDirectionsAll],
+                    [8, 'ANIMATION_EDITOR_HEAD_CHANGE', 270, 310, [], animationCacheDirectionsAll],                   
+                    [9, 'ANIMATION_EDITOR_PANTS_CHANGE', 310, 380, [], animationCacheDirectionsAll],
+                    [10, 'ANIMATION_DEAD', 399, 400, [], animationCacheDirectionsAll],
+                    [11, 'ANIMATION_HIRE_TRASHCAN', 395, 396, [], animationCacheDirectionsAll],
+					[12, 'ANIMATION_HIRE_BUS', 393, 394, [], animationCacheDirectionsAll],
+					[13, 'ANIMATION_HIRE_BENCE', 318, 319, [], animationCacheDirectionsAll],
+                    [14, 'ANIMATION_WAITOR_WORKING', 90, 105, [], animationCacheDirectionsAll],
+                    [15, 'ANIMATION_STREET_WALK', 0, 25, [], [2]], //, 6
+                    [16, 'ANIMATION_STREET_IDLE', 60, 85, [], [0, 4]],
+                    [17, 'ANIMATION_CLEAN', 406, 423, ["bucket", "brush"], animationCacheDirectionsAll],
+                    [18, 'ANIMATION_CLEANER_WALK', 0, 25, ["brush"], animationCacheDirectionsAll],
+                    [19, 'ANIMATION_CLEANER_IDLE', 60, 85, ["bucket", "brush"], animationCacheDirectionsAll],
+                    [20, 'ANIMATION_CLEANER_DEAD', 399, 400, ["bucket", "brush"], animationCacheDirectionsAll],
+                    [21, 'ANIMATION_CLEANER_REPAIR', 423, 450, ["repair"], animationCacheDirectionsAll],
+                ];
+            window['databaseItems'] = {};
+            window['customisableObjects'] = ["bucket", "brush", "tray", "repair"];
+            window['avatarTypes'] = ['SkinColour', 'HairColour', 'Eyes', 'Mouth', 'Pants', 
+									'Skirt', 'Shirt', 'Hat', 'Hair', 'Facial Hair', 
+									'Miscellaneous', 'Eyebrows'];
+            let baseAvatar;
+            let modelLoaded = false;
+            let textureSize = 256;
+            let avatarScale = 0.35;
+            let animationSPF = 0.1;
+            let animationCacheDirections = 8;           
+            let anglePerDirection = 45;
+            let scene;
+            let cachingScene;
+            let cachingSceneIsometric;
+            let camera;
+            let cachingCamera;
+            let cachingCameraIsometric;
+            let renderer;
+            let cachingRenderer;
+            let cachingRendererIsometric;
+            let cachingControls;
+            
+            //======================================           
+            window['cachingIntervals'] = {};      
+            init();            
+            function init() {              
+                var dbLoader = new THREE.FileLoader();
+                dbLoader.setResponseType('json').load('../res/bin/html5/avatar.json', dbLoaded);
+            }
+            
+            function dbLoaded(data)
+            {
+                window['databaseItems'] = data;
+                loadModel();
+            }
+            
+            function loadModel()
+            {
+                if(modelLoaded === false)
+                {
+                    var loader = new GLTFLoader().setPath( '../res/bin/html5/' );
+                    loader.load( 'sceneFull.glb', initAvatar);
+                    lime.embed ("Streetscafe", "openfl-content",  720, 700, {  "parameters": { "user_id":"733552", "auth":"c61650a46a92c369bb61a4335e8eaa6d" } });
+                }
+                else
+                {
+                    initAvatar(baseAvatar);
+                }
+            }
+            
+            function initAvatar( gltf ) 
+            { 
+                baseAvatar = gltf;
+                modelLoaded = true; 
+            }
+            
+                      
+            window['createMainElements'] = function(modelID)
+            {               
+                var canvas = document.createElement('canvas');
+                canvas.id = modelID;     
+                canvas.setAttribute('width', textureSize);
+                canvas.setAttribute('height', textureSize);
+                document.getElementById('canvasContainer').appendChild(canvas); 
+                var ctx = canvas.getContext("2d");
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                if(typeof(window['activeScenes'][modelID]) == 'undefined')
+                    window['activeScenes'][modelID] = {};
+                window['activeScenes'][modelID]['canvas'] = canvas;
+                if(typeof(cachingScene) == 'undefined')
+                {
+                    cachingScene = new THREE.Scene();
+                }
+                else
+                {
+                    cachingScene.clear();
+                }
+                
+                if(typeof(cachingSceneIsometric) == 'undefined')
+                {
+                    cachingSceneIsometric = new THREE.Scene();
+                }
+                else
+                {
+                    cachingSceneIsometric.clear();
+                }
+               
+                if(typeof(scene) == 'undefined')
+                {
+                    scene = new THREE.Scene();
+                }
+                else
+                {
+                    scene.clear();
+                }   
+                initCamera();
+            }
+            
+            function initControls(modelID)
+            {  
+                if(typeof(cachingControls) == 'undefined')
+                {
+                    cachingControls = new OrbitControls( cachingCameraIsometric, cachingRendererIsometric.domElement );
+                    cachingControls.screenSpacePanning = false;
+                    cachingControls.autoRotate = false; 
+                 //   controls.autoRotateSpeed = 10;
+                    cachingControls.minDistance = 400;
+                    cachingControls.maxDistance = 400;
+                    cachingControls.target.set( 0, 0, 0 );
+                    cachingControls.update();
+                }
+                //window['activeScenes'][modelID]['controls'] = controls;
+            }
+            
+            function initCamera(modelID)
+            {      
+                
+                if(typeof(cachingCamera) == 'undefined')
+                {
+                    cachingCamera = new THREE.PerspectiveCamera( 22, 256 / 256, 1, 1000 );
+                    cachingScene.add(cachingCamera); 
+                    cachingCamera.position.set( 0, 33, 250 );
+                }
+                if(typeof(cachingCameraIsometric) == 'undefined')
+                {
+                    cachingCameraIsometric = new THREE.PerspectiveCamera( 22, 256 / 256, 1, 1000 );
+                    cachingSceneIsometric.add(cachingCameraIsometric); 
+                    cachingCameraIsometric.position.set( 0, 250, 350 );
+                }                                   
+                
+                if(typeof(camera) == 'undefined')
+                {
+                    camera = new THREE.PerspectiveCamera( 22, 256 / 256, 1, 1000 );
+                    scene.add(camera);
+                    camera.position.set( 0, 33, 250 );
+                }               
+                
+            }
+            
+            function applyTextureSkin(modelID)
+            {         
+                var avatar = baseAvatar.scene;
+                avatar.scale.set(avatarScale, avatarScale, avatarScale);
+                avatar.traverse( function(child) {               
+                    parseChild(child, modelID);
+                });
+                var animations = baseAvatar.animations;
+                
+                if(window['activeScenes'][modelID]['cachingMode'])
+                {
+                    if(window['activeScenes'][modelID]['isometric'])
+                        cachingSceneIsometric.add(avatar);
+                    else
+                        cachingScene.add(avatar);
+                }
+                else
+                {                  
+                    if(window['activeScenes'][modelID]['firstSet'])
+                    {
+                        avatar.rotation.set( 0, 0, 0 );
+                        window['activeScenes'][modelID]['firstSet'] = false;
+                    }
+                    scene.add( avatar );
+                }
+                window['activeScenes'][modelID]['avatar'] = avatar;
+                window['activeScenes'][modelID]['animations'] = animations;
+                var mixer = new THREE.AnimationMixer( avatar );
+                window['activeScenes'][modelID]['mixer'] = mixer;
+                initClock(modelID);                           
+                initRenderer(modelID);                
+            }            
+
+            function initClock(modelID)
+            {                
+                if(!window['activeScenes'][modelID]['cachingMode'])
+                {
+                    var clock = new THREE.Clock();
+                    window['activeScenes'][modelID]['clock'] = clock;                    
+                }
+            }
+            
+            function initRenderer(modelID)
+            {
+                var sizeX = 256;
+                var sizeY = 256; 
+                if(typeof(cachingRenderer) == 'undefined')
+                {
+                    cachingRenderer = new THREE.WebGLRenderer( { antialias: true, alpha: true, preserveDrawingBuffer: true } );                    
+                    cachingRenderer.setPixelRatio( window.devicePixelRatio );
+                    cachingRenderer.setSize( sizeX, sizeY );
+                }
+                if(typeof(cachingRendererIsometric) == 'undefined')
+                {
+                    cachingRendererIsometric = new THREE.WebGLRenderer( { antialias: true, alpha: true, preserveDrawingBuffer: true } );                    
+                    cachingRendererIsometric.setPixelRatio( window.devicePixelRatio );
+                    cachingRendererIsometric.setSize( sizeX, sizeY );
+                }               
+                if(typeof(renderer) == 'undefined')
+                {
+                    renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true, preserveDrawingBuffer: true } );                    
+                    renderer.setPixelRatio( window.devicePixelRatio );
+                    renderer.setSize( sizeX, sizeY );
+                }                
+                if(window['activeScenes'][modelID]['isometric'])
+                    initControls(modelID);
+            }
+                                   
+            window['setAvatarFields'] = function(modelID)
+            {    
+                createMainElements(modelID);
+                var avatarItems = window['activeScenes'][modelID]['avatarItems'];                
+                var renderFields = [];            
+                var renderNodes = [];
+                renderNodes.push('face0');
+                window['activeScenes'][modelID]['renderNodes'] = renderNodes;				
+				var i = 0;
+				while(i < window['avatarTypes'].length)
+				{
+					renderFields.push(parseAvatarItem(avatarItems[i], window['avatarTypes'][i], modelID));
+					i++;
+				}				
+                window['activeScenes'][modelID]['renderFields'] = renderFields;               
+                makeTextureCanvas(modelID);                  
+            }
+             
+            function parseAvatarItem(itemId, group, modelID)
+            {                
+                if(itemId == 0) return null;
+                var database = window['databaseItems'];
+                for(let i = 0; i < database.groups.length; i++) 
+                {                               
+                    if(database.groups[i].groupName == group)
+                    {
+                        var currGroup = database.groups[i];
+                        for(let j = 0; j < currGroup.items.length; j++) 
+                        { 
+                            if(currGroup.items[j].id == itemId)
+                            {
+                                var item = currGroup.items[j];
+                                if(typeof(item.object)!='undefined')
+                                {
+                                    var objArr = item.object.split(', ');
+                                    for(var renderObj in objArr)
+                                    {                                      
+                                        window['activeScenes'][modelID]['renderNodes'].push(objArr[renderObj]);
+                                    }                                               
+                                }
+                                if(group == 'SkinColour' || group == 'HairColour')
+                                    return item.name.split('0x').join('#');
+                                else if(item.texture != 'null')
+                                    return './avatar_asset/' + item.texture + '.png';
+                                else
+                                    return null;
+                            }
+                        }
+                    }
+                }                
+            }
+            
+            function makeTextureCanvas(modelID)
+            {                           
+                var renderFields = window['activeScenes'][modelID]['renderFields'];
+                
+                var totalImages = 0;
+                var loadedImages = 0;
+				var i=2;
+				while(i < 12)
+				{
+					if(renderFields[i] != null) totalImages++;
+					i++;
+				}           
+                window['activeScenes'][modelID]['totalImages'] = totalImages;
+                window['activeScenes'][modelID]['loadedImages'] = loadedImages;                
+                               
+                var textureCanvas = document.getElementById(modelID);
+                var ctx = textureCanvas.getContext("2d");
+                ctx.fillStyle = renderFields[0];
+                ctx.fillRect(0, 0, textureCanvas.width, textureCanvas.height);                
+                if(totalImages == 0)
+                    applyTextureSkin(modelID);
+                else
+                    for(var i=1; i< renderFields.length; i++)
+                        if(renderFields[i] != null)
+                            addCanvasImage(renderFields[i], ctx, modelID);                            
+                    
+            }
+            
+            function addCanvasImage(path, ctx, modelID)
+            {                            
+                var totalImages = window['activeScenes'][modelID]['totalImages'];                 
+                var imageObj = new Image();
+                imageObj.src = path;
+                imageObj.onload = function() {
+                    window['activeScenes'][modelID]['loadedImages']++;
+                    ctx.drawImage(imageObj, 0, 0, textureSize, textureSize * imageObj.height / imageObj.width);        
+                    if(window['activeScenes'][modelID]['loadedImages'] == totalImages)
+                    {
+                        applyTextureSkin(modelID);
+                    }
+                } 
+            }
+            
+            window['playAnimationClip'] = function(modelID, clipName, countPlay, queneAnimations, stopOnFinish)
+            {              
+                if(window['activeScenes'][modelID]['cachingIntervals'] == 'makingTexture')
+                {
+                    setTimeout(function() {
+                        window['playAnimationClip'](modelID, clipName, countPlay, queneAnimations, stopOnFinish);
+                    }, 100);
+                    return;
+                }             
+                var animations = baseAvatar.animations;
+                var mixer = window['activeScenes'][modelID]['mixer'];
+                var activeClipAction = window['activeScenes'][modelID]['activeClipAction'];
+                
+                for(var _clip in window['clipsFrameRate'])
+                {
+                    var currAnimation = clipsFrameRate[_clip];
+                    if(clipName == currAnimation[0])
+                    {                       
+                        var customNodes = currAnimation[4];
+                        var avatar = window['activeScenes'][modelID]['avatar'];
+                        if(typeof(avatar) == 'undefined')
+                        {
+                            setTimeout(function() {
+                                window['playAnimationClip'](modelID, clipName, countPlay, queneAnimations, stopOnFinish);
+                            }, 100);
+                            return;
+                        }      
+                        avatar.traverse( function(child) {
+                            if( window['customisableObjects'].join(',').indexOf(child.name) >= 0)
+                            {                                
+                                if(currAnimation[4].join(',').indexOf(child.name) >= 0)
+                                {
+                                    child.visible = true;                                   
+                                }
+                                else
+                                {
+                                    child.visible = false;                                    
+                                }                               
+                            }   
+                      });
+                        if(activeClipAction != null)
+                        {
+                            activeClipAction.stop();
+                        }
+                        var activeClip = THREE.AnimationUtils.subclip( animations[0], 'activeClip', currAnimation[2], currAnimation[3]);                        
+                        activeClipAction = mixer.clipAction( activeClip );
+                        window['activeScenes'][modelID]['activeClipAction'] = activeClipAction;
+                        window['activeScenes'][modelID]['activeClip'] = activeClip;
+                        window['activeScenes'][modelID]['activeClip']['clipName']= clipName;
+                        
+                        var totalFrames = window['activeScenes'][modelID]['isSingleFrame'] ? 1 : Math.ceil(activeClip.duration / animationSPF) - 1;   
+                        if(totalFrames == 0) totalFrames = 1;
+                        window['activeScenes'][modelID]['activeClip']['totalFrames'] = totalFrames;                        
+                        window['activeScenes'][modelID]['activeClip']['directions'] = currAnimation[5];
+                        activeClipAction.play();
+                        if(window['activeScenes'][modelID]['cachingMode'])
+                        {
+                            var currentDirection = currAnimation[5][0];
+                            window['activeScenes'][modelID]['queneAnimations'] = queneAnimations;
+                            makeCacheFrames(modelID, currentDirection, queneAnimations);
+                        }
+                        else
+                        {
+                            if(countPlay != -1)
+                            {
+                                var duration = activeClip.duration * 1000;
+                                if(queneAnimations.length == 0 && stopOnFinish)
+                                {
+                                    setTimeout(function() {
+                                        activeClipAction.stop();
+                                        /*
+                                        var renderer = window['activeScenes'][modelID]['renderer'];
+                                        renderer.dispose();
+                                        window['activeScenes'][modelID]['renderer'] = null;
+                                        */
+                                    }, duration);
+                                }
+                                else
+                                {
+                                    var nextAnimation = queneAnimations[0];
+                                    queneAnimations.splice(0, 1);                            
+                                    var countNextPlaying = queneAnimations.length == 0 && !stopOnFinish ? -1 : 1;                           
+                                    setTimeout(function() {
+                                        window['playAnimationClip'](modelID, nextAnimation, countNextPlaying, queneAnimations, stopOnFinish);
+                                    }, duration);
+                                }
+                            }
+                            animate(modelID);
+                            setTimeout(window['captureFrame'], 100, modelID);
+                            
+                        }
+                    }
+                }                        
+            }
+            
+            function makeCacheFrames(modelID, direction, queneAnimations)
+            {              
+                var avatar = window['activeScenes'][modelID]['avatar']; 
+                var mixer = window['activeScenes'][modelID]['mixer'];
+                var clipName = window['activeScenes'][modelID]['activeClip']['clipName'];               
+                var totalFrames = window['activeScenes'][modelID]['activeClip']['totalFrames'];              
+                var clipDirections = window['activeScenes'][modelID]['activeClip']['directions'];             
+                if ( mixer !== undefined ) {
+                    mixer.update( animationSPF );
+                }              
+                if(typeof(window['activeScenes'][modelID]['cachedISO']) == 'undefined')
+                {
+                    window['activeScenes'][modelID]['cachedISO'] = [];
+                    window['activeScenes'][modelID]['cachedISO']['frameData'] = [];
+                }
+                if(typeof(window['activeScenes'][modelID]['cachedISO'][clipName]) == 'undefined')
+                {
+                    window['activeScenes'][modelID]['cachedISO'][clipName] = [];
+                    window['activeScenes'][modelID]['cachedISO']['frameData'][clipName] = [];
+                }
+                if(typeof(window['activeScenes'][modelID]['cachedISO'][clipName][direction]) == 'undefined')
+                {
+                    window['activeScenes'][modelID]['cachedISO'][clipName][direction] = [];
+                    window['activeScenes'][modelID]['cachedISO']['frameData'][clipName][direction] = [];
+                    avatar.rotation.set( 0, 0, 0 );
+                    avatar.rotateY(anglePerDirection * direction);   
+                }
+                var imageSrc;
+                if(window['activeScenes'][modelID]['isometric'])
+                {
+                    cachingControls.update();
+                    cachingRendererIsometric.render( cachingSceneIsometric, cachingCameraIsometric );
+                    imageSrc = cachingRendererIsometric.domElement.toDataURL();
+                }
+                else
+                {
+                    cachingRenderer.render( cachingScene, cachingCamera );
+                    imageSrc = cachingRenderer.domElement.toDataURL();
+                }
+                var nextDirection = -1;
+                for(var i = 0; i<clipDirections.length; i++)               
+                    if(clipDirections[i] == direction)
+                        if(typeof(clipDirections[i+1]) != 'undefined')
+                            nextDirection = clipDirections[i+1];               
+             
+                if(typeof(window['activeScenes'][modelID]['cachedISO'][clipName][direction]['frames']) == 'undefined')
+                {
+                    window['activeScenes'][modelID]['cachedISO'][clipName][direction]['frames'] = 0;
+                }
+                
+                /*
+                if(modelID!='placeholderUser' && clipName == 10)
+                {                                    
+                    var imgHtml = new Image();
+                    imgHtml.src = imageSrc;
+                //    imgHtml.width = 150;
+                    imgHtml.onload = function() {
+                        var container = document.getElementById( 'containerFrames' );
+                        container.append(imgHtml);
+                    };
+               }
+                */
+                window['activeScenes'][modelID]['cachedFrames']++;
+                var message = {};
+                var frame = window['activeScenes'][modelID]['cachedISO'][clipName][direction]['frames'];
+                message['modelID'] = modelID;
+                message['anim'] = clipName;
+                message['direction'] = direction;
+                message['frame'] = frame;
+                message['imgData'] = imageSrc;
+                window['activeScenes'][modelID]['cachedISO'][clipName][direction]['frames']++;
+              //  window['activeScenes'][modelID]['cachedISO']['frameData'][clipName][direction][frame] = imageSrc.substring(22);
+                                
+                document.getElementById ("openfl-content").translateCacheFrame(JSON.stringify(message));                
+                if(window['activeScenes'][modelID]['cachedISO'][clipName][direction]['frames'] <= totalFrames && !window['activeScenes'][modelID]['isSingleFrame'])
+                {                                      
+                    makeCacheFrames(modelID, direction, queneAnimations);                       
+                }
+                else if(nextDirection!=-1 && !window['activeScenes'][modelID]['isSingleFrame'])
+                {                       
+                    makeCacheFrames(modelID, nextDirection, queneAnimations);
+                }
+                else if(queneAnimations.length > 0 && !window['activeScenes'][modelID]['isSingleFrame'])
+                {
+                    var nextAnimation = queneAnimations[0];
+                    queneAnimations.splice(0, 1);
+                    window['playAnimationClip'](modelID, nextAnimation, 1, queneAnimations, true);                      
+                } 
+                else
+                { 
+					if(window['activeScenes'][modelID]['isSingleFrame'] && window['activeScenes'][modelID]['isCurrentGameUser'])
+					{
+						message = {};
+						message['userID'] = '733552';
+						message['authCode'] = 'c61650a46a92c369bb61a4335e8eaa6d';
+						message['image'] = imageSrc.substring(22);
+						$.post( "../avatarStorage.php", message );						
+					}
+					/*
+					cachingRendererIsometric.clear();
+					cachingRendererIsometric.dispose();
+					cachingRendererIsometric = null;
+					
+					cachingRenderer.clear();
+					cachingRenderer.dispose();
+					cachingRenderer = null;	
+					*/					
+					document.getElementById(modelID).remove();
+					
+					/*
+                    message = {};
+                    message['modelID'] = modelID;
+                    message['frameData'] = window['activeScenes'][modelID]['cachedISO']['frameData'];
+                    $.post( "../modelExport.php", message );
+                    delete window['activeScenes'][modelID]['cachedISO']['frameData'];
+					*/
+                }
+                            
+            }
+            
+            function parseChild( child, modelID ) 
+            {              
+                var nodes = 
+                [
+                    'hair03', 'hair07', 'hair02', 'hair05', 
+                    'hair04', 'hair08', 'hair09', 'hair10', 
+                    'hat04', 'hat08', 'shirt01', 'hat05', 
+                    'hair06', 'dress', 'pants01', 'face0',
+                    'hat06', 'tray', 'armleft', 'armright',
+                    'hair01', 'hat09', 'hat03', 'hat01', 
+                    'hat02', 'hat07', 'brush', 'hair13', 
+                    'hair14', 'hair17', 'hair15', 'hair18', 
+                    'armright2', 'armleft2', 'hat10', 'repair', 'bucket'
+                ];
+                var renderFields = window['activeScenes'][modelID]['renderFields'];
+                var renderNodes = window['activeScenes'][modelID]['renderNodes'];
+                if(typeof(renderNodes) == 'undefined')
+                {
+                    renderNodes = ['hair05', 'face0', 'pants01', 'shirt01', 'armleft', 'armright'];
+                }
+                
+                if(child.name == 'tray') 
+                {
+                    var mapName = modelID == 'placeholderUser' ? 'mapSpacer.png' : 'mapTray.png';
+                    const textureLoader = new THREE.TextureLoader();
+                   textureLoader.load( "../assets/" + mapName, function ( map ) {                                                                 
+                        child.material.map = map;
+                        child.material.needsUpdate = true;
+                    });
+                }
+                if(child.name == 'brush' || child.name == 'bucket_PIVOT') 
+                {
+                    var mapName = modelID == 'placeholderUser' ? 'mapSpacer.png' : 'mapCleaner.png';
+                    const textureLoader = new THREE.TextureLoader();
+                    textureLoader.load( "../assets/" + mapName, function ( map ) {                                       
+                        child.material.map = map;
+                        child.material.needsUpdate = true;                                    
+                    });
+                }
+                if(child.name == 'repair') 
+                {
+                    var mapName = modelID == 'placeholderUser' ? 'mapSpacer.png' : 'repairMap.png';
+                    const textureLoader = new THREE.TextureLoader();
+                    textureLoader.load( "../assets/" + mapName, function ( map ) {                                                                     
+                        child.material.map = map;
+                        child.material.needsUpdate = true;                                   
+                    });
+                }
+                if(renderNodes.join(',').indexOf(child.name) < 0 && nodes.join(',').indexOf(child.name) >= 0)
+                {                                                        
+                    child.visible = false;
+                }                                                    
+                else
+                {
+                    child.visible = true;                  
+                    if(child.name == 'face0') 
+                    {                       
+                        var canvas = document.getElementById(modelID);
+                        var imgBase64 = canvas.toDataURL("image/png");                        
+                        var image = new Image();
+                        image.src = imgBase64;
+                        var texture =  new THREE.Texture();
+                        texture.image = image;                        
+                        image.onload = function () {
+                            texture.needsUpdate = true;
+                            child.material.map = texture;
+                            child.material.needsUpdate = true;
+                            window['activeScenes'][modelID]['cachingIntervals'] = "active";
+                            var message = {};
+                            message['modelID'] = modelID;
+                            document.getElementById ("openfl-content").initedObjects(JSON.stringify(message));
+                        };                        
+                    }                
+                    if(child.name.substring(0,4) == 'hair')
+                    {
+                        if(typeof(renderFields) != 'undefined' )
+                            child.material.color.set(renderFields[1]);
+                        else
+                            child.material.color.set('#FFFFFF');
+                        child.material.needsUpdate = true;                       
+                    }                  
+                }
+            }
+            
+            function animate(modelID)
+            {      
+                var clock = window['activeScenes'][modelID]['clock'];
+                if(typeof(clock) == 'undefined')
+                {
+                    setTimeout(animate, 100, modelID);
+                }
+                else
+                {
+                    if(renderer != null)
+                    {
+                        requestAnimationFrame( function(reqId) {
+                            animate(modelID);
+                        });
+                        render(modelID);
+                    }   
+                }
+            }
+            
+            function render(modelID) 
+            {
+                var clock = window['activeScenes'][modelID]['clock'];               
+                var delta = clock.getDelta();
+                var mixer = window['activeScenes'][modelID]['mixer'];                
+                if ( mixer !== undefined ) {
+                    mixer.update( delta );
+                }
+                renderer.render( scene, camera );
+            }
+            
+            window['captureFrame'] = function (modelID) 
+            {             
+                if(window['activeScenes'][modelID]['cachingIntervals'] == "active")
+                {
+                    var imgData = renderer.domElement.toDataURL();                 
+                    var message = {};
+                    message['imgData'] = imgData;
+                    message['modelID'] = modelID;
+                    document.getElementById ("openfl-content").translateFrame(JSON.stringify(message));
+                }
+                if(window['activeScenes'][modelID]['cachingIntervals'] != "completed")
+                   setTimeout(window['captureFrame'], 100, modelID);
+            }
+            
+            window['rotationAvatar'] = function (modelID, rotation) 
+            {
+                var avatar = window['activeScenes'][modelID]['avatar'];
+                if(rotation == 'left')
+                {
+                    avatar.rotateY(-0.1);
+                }
+                else
+                {
+                    avatar.rotateY(0.1);
+                }
+            }
+	</script>	
+</body>
+</html>
